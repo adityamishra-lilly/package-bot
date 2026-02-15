@@ -13,7 +13,8 @@ from app.workflows.agent_orchestrator import RemediationOrchestratorWorkflow
 from app.activities.fetch_dependabot_alerts import fetch_dependabot_alerts_activity
 from app.activities.build__alerts_object import build_alerts_object_activity
 from app.activities.load_remediation_plan import load_remediation_plan_activity
-from app.activities.execute_agent_activity import execute_agent_activity
+from app.activities.execute_dependency_remediation_activity import execute_dependency_remediation_activity
+from app.activities.execute_pull_request_activity import execute_pull_request_activity
 
 
 class PackagebotTemporalWorker:
@@ -83,7 +84,8 @@ class PackagebotTemporalWorker:
                     fetch_dependabot_alerts_activity,
                     build_alerts_object_activity,
                     load_remediation_plan_activity,
-                    execute_agent_activity,
+                    execute_dependency_remediation_activity,
+                    execute_pull_request_activity,
                 ],
                 max_concurrent_activities=20,
             )

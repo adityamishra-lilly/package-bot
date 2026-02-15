@@ -1,0 +1,12 @@
+services:
+  jira-mcp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - JIRA_URL=${JIRA_URL}
+      - JIRA_EMAIL=${JIRA_EMAIL}
+      - JIRA_API_TOKEN=${JIRA_API_TOKEN}
+      - JIRA_READ_ONLY_MODE=${JIRA_READ_ONLY_MODE:-false}
+      - JIRA_LOG_LEVEL=${JIRA_LOG_LEVEL:-INFO}
+    stdin_open: true

@@ -1,70 +1,64 @@
 import os
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any, Dict
 
 
 def get_jira_mcp_config() -> Dict[str, Any]:
     """
-    Build GitHub MCP server configuration for Claude Agent SDK.
-    
-    Uses GIT_COMMAND_TOKEN from environment for authentication.
-    
+    Build Jira MCP server configuration for Claude Agent SDK.
+
+    Uses JIRA_URL, JIRA_EMAIL, and JIRA_API_TOKEN from environment.
+
     Returns:
         MCP server configuration dict for stdio transport
-        
+
     Raises:
-        ValueError: If GIT_COMMAND_TOKEN is not set
+        ValueError: If required environment variables are not set
     """
-    github_token = os.getenv("GIT_COMMAND_TOKEN")
-    if not github_token:
-        raise ValueError("GIT_COMMAND_TOKEN environment variable is required for GitHub MCP")
-    
-    # GitHub MCP server configuration (stdio transport)
-    # See: https://github.com/github/github-mcp-server
+    jira_url = os.getenv("JIRA_URL")
+    jira_email = os.getenv("JIRA_EMAIL")
+    jira_api_token = os.getenv("JIRA_API_TOKEN")
+
+    if not all([jira_url, jira_email, jira_api_token]):
+        raise ValueError(
+            "JIRA_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables are required "
+            "for Jira MCP"
+        )
+
+    # Resolve jira-mcp project directory relative to this file
+    jira_mcp_dir = str(Path(__file__).resolve().parent.parent.parent / "jira-mcp")
+
     return {
-        "command": "npx",
-        "args": [
-            "-y",
-            "@modelcontextprotocol/server-github"
-        ],
+        "command": "poetry",
+        "args": ["run", "python", "-m", "jira_mcp"],
         "env": {
-            "GITHUB_PERSONAL_ACCESS_TOKEN": github_token
-        }
+            "JIRA_URL": jira_url,
+            "JIRA_EMAIL": jira_email,
+            "JIRA_API_TOKEN": jira_api_token,
+        },
+        "cwd": jira_mcp_dir,
     }
 
 
 def get_jira_mcp_tools() -> list[str]:
     """
-    Get list of GitHub MCP tool names for allowlist based on agent type.
-    
-    Args:
-        agent_type: Type of agent ("planner" or "executor")
-        
-    Returns:
-        List of tool names prefixed with 'mcp__github__'
-    """
-    # GitHub MCP server provides these tools:
-    # - create_or_update_file
-    # - search_repositories
-    # - create_repository
-    # - get_file_contents
-    # - push_files
-    # - create_issue
-    # - create_pull_request
-    # - fork_repository
-    # - create_branch
-    # - search_code
-    # - search_issues
-    # - list_commits
-    # - list_issues
+    Get list of Jira MCP tool names for allowlist.
 
+    Returns:
+        List of tool names prefixed with 'mcp__jira__'
+    """
     return [
-            "mcp__github__create_branch",
-            "mcp__github__create_or_update_file",
-            "mcp__github__push_files",
-            "mcp__github__create_pull_request",
-            "mcp__github__get_file_contents",
-            "mcp__github__get_file_contents",
-            "mcp__github__search_code",
-            "mcp__github__search_repositories",
-            "mcp__github__list_commits"
-          ]
+        "mcp__jira__create_issue",
+        "mcp__jira__get_issue",
+        "mcp__jira__update_issue",
+        "mcp__jira__assign_issue",
+        "mcp__jira__delete_issue",
+        "mcp__jira__search_issues",
+        "mcp__jira__get_issue_by_key",
+        "mcp__jira__add_comment",
+        "mcp__jira__get_comments",
+        "mcp__jira__get_transitions",
+        "mcp__jira__transition_issue",
+        "mcp__jira__list_projects",
+        "mcp__jira__get_project",
+    ]
