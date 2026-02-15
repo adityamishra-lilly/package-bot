@@ -1,0 +1,62 @@
+jira-mcp/
+├── README.md
+├── pyproject.toml
+├── uv.lock / poetry.lock
+├── .gitignore
+├── .env.example
+├── .editorconfig
+├── .python-version
+
+├── src/
+│   └── jira_mcp/
+│       ├── __init__.py
+│       ├── __main__.py          # python -m jira_mcp entrypoint
+│       ├── server.py            # FastMCP server definition
+│       ├── settings.py          # env + config loading
+│       ├── lifespan.py          # startup/shutdown hooks
+│       │
+│       ├── jira/                # Jira domain logic
+│       │   ├── __init__.py
+│       │   ├── client.py        # HTTP client + auth
+│       │   ├── models.py        # Typed Jira response models
+│       │   ├── adf.py           # Atlassian Document Format helpers
+│       │   └── errors.py
+│       │
+│       ├── tools/               # MCP tools (Claude calls these)
+│       │   ├── __init__.py
+│       │   ├── issues.py
+│       │   ├── search.py
+│       │   ├── comments.py
+│       │   ├── transitions.py
+│       │   └── projects.py
+│       │
+│       ├── guards/              # Safety & policy
+│       │   ├── __init__.py
+│       │   ├── permissions.py
+│       │   ├── read_only.py
+│       │   └── rate_limit.py
+│       │
+│       ├── logging/
+│       │   ├── __init__.py
+│       │   └── logger.py
+│       │
+│       └── utils/
+│           ├── __init__.py
+│           ├── retry.py
+│           └── timing.py
+│
+├── tests/
+│   ├── unit/
+│   │   ├── test_jira_client.py
+│   │   ├── test_tools_search.py
+│   │   └── test_guards.py
+│   └── integration/
+│       └── test_mcp_stdio.py
+│
+├── scripts/
+│   ├── run_local.sh
+│   └── health_check.py
+│
+├── docker/
+│   ├── Dockerfile
+│   └── docker-compose.yml
