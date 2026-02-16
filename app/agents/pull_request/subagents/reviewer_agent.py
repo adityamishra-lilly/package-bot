@@ -5,6 +5,8 @@ Reviews PRs and ensures they meet quality standards.
 
 from claude_agent_sdk import AgentDefinition
 
+from app.mcp.github_mcp import get_github_mcp_tools
+
 REVIEWER_APPROVED_TOOLS = [
     "Read",
     "Bash",
@@ -13,7 +15,7 @@ REVIEWER_APPROVED_TOOLS = [
     "WebFetch",
     "TodoWrite",
     "Skill",
-]
+] + get_github_mcp_tools()
 
 reviewer_agent = AgentDefinition(
     description="Reviewer agent that validates pull requests meet security update standards",

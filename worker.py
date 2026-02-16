@@ -15,6 +15,7 @@ from app.activities.build__alerts_object import build_alerts_object_activity
 from app.activities.load_remediation_plan import load_remediation_plan_activity
 from app.activities.execute_dependency_remediation_activity import execute_dependency_remediation_activity
 from app.activities.execute_pull_request_activity import execute_pull_request_activity
+from app.activities.execute_jira_ticket_activity import execute_jira_ticket_activity
 
 
 class PackagebotTemporalWorker:
@@ -86,6 +87,7 @@ class PackagebotTemporalWorker:
                     load_remediation_plan_activity,
                     execute_dependency_remediation_activity,
                     execute_pull_request_activity,
+                    execute_jira_ticket_activity,
                 ],
                 max_concurrent_activities=20,
             )

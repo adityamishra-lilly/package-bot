@@ -13,6 +13,13 @@ PLANNER_APPROVED_TOOLS = [
     "WebSearch",
     "TodoWrite",
     "Skill",
+    # Read-only GitHub MCP tools (no write access for planner)
+    "mcp__github__get_file_contents",
+    "mcp__github__search_code",
+    "mcp__github__search_repositories",
+    "mcp__github__list_commits",
+    "mcp__github__search_issues",
+    "mcp__github__list_issues",
 ]
 
 planner_agent = AgentDefinition(

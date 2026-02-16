@@ -19,6 +19,7 @@ import json
 
 from app.agents.dependency_remediation.agent import run_dependency_remediation_agent
 from app.agents.pull_request.agent import run_pull_request_agent
+from app.agents.jira_ticket.agent import run_jira_ticket_agent
 
 
 async def run_full_remediation(
@@ -84,6 +85,7 @@ async def run_full_remediation(
         "repo_name": repo_name,
         "remediation": None,
         "pull_request": None,
+        "jira_ticket": None,
         "total_duration_ms": 0,
         "error": None,
         "total_cost_usd": 0.0
@@ -138,6 +140,46 @@ async def run_full_remediation(
             if pr_result.get("status") == "success":
                 result["status"] = "success"
                 logging.info(f"PR created for {repo_name}: {pr_result.get('pr_url')}")
+
+                # Phase 3: Jira Ticket Creation (if PR was created)
+                if pr_result.get("pr_url") and pr_result.get("pr_number"):
+                    logging.info(f"Starting Jira ticket creation for {repo_name}")
+                    try:
+                        jira_log_dir = log_dir / "jira_ticket"
+                        jira_result = await run_jira_ticket_agent(
+                            org=org,
+                            repo_name=repo_name,
+                            pr_url=pr_result["pr_url"],
+                            pr_number=pr_result["pr_number"],
+                            branch_name=remediation_result["branch_name"],
+                            vulnerability_data=repository_data,
+                            workspace_dir=workspace_dir,
+                            log_dir=jira_log_dir,
+                            major_version_updates=remediation_result.get("major_version_updates", []),
+                        )
+
+                        result["jira_ticket"] = jira_result
+
+                        if jira_result.get("total_cost_usd"):
+                            result["total_cost_usd"] += jira_result["total_cost_usd"]
+
+                        if jira_result.get("status") == "success":
+                            logging.info(f"Jira ticket created for {repo_name}: {jira_result.get('jira_key')}")
+                        else:
+                            logging.warning(
+                                f"Jira ticket creation failed for {repo_name}: "
+                                f"{jira_result.get('error', 'Unknown error')} "
+                                f"(non-critical, PR was created successfully)"
+                            )
+                    except Exception as jira_err:
+                        logging.warning(
+                            f"Jira ticket creation failed for {repo_name}: {jira_err} "
+                            f"(non-critical, PR was created successfully)"
+                        )
+                        result["jira_ticket"] = {
+                            "status": "failure",
+                            "error": str(jira_err),
+                        }
             else:
                 result["status"] = "partial"
                 result["error"] = f"PR creation failed: {pr_result.get('error', 'Unknown error')}"
@@ -174,4 +216,5 @@ __all__ = [
     "run_full_remediation",
     "run_dependency_remediation_agent",
     "run_pull_request_agent",
+    "run_jira_ticket_agent",
 ]

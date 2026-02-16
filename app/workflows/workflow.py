@@ -274,57 +274,112 @@ class PackagebotWorkflow:
             )
             raise
 
-        # Step 2: Execute RemediationOrchestratorWorkflow if enabled
+        # Step 2: Execute RemediationOrchestratorWorkflow per repository if enabled
         if enable_remediation:
             workflow.logger.info(
-                "Step 2: Executing RemediationOrchestratorWorkflow child workflow..."
+                "Step 2: Executing RemediationOrchestratorWorkflow per repository..."
             )
-            
-            try:
-                # Use repositories data from DependabotAlertsWorkflow result
-                if not repositories:
-                    workflow.logger.warning("No repositories found in remediation plan, skipping remediation")
-                    parent_results["execution_summary"]["status"] = "completed_no_repos"
-                else:
-                    # Execute remediation orchestrator
-                    remediation_input = {
-                        "workflow_id": f"{workflow_id}-remediation",
-                        "org": org,
-                        "remediation_plan_path": build_result.get("file_path"),
-                        "repositories": repositories,
-                        "skip_repos": input_data.get("skip_repos", [])
-                    }
-                    
-                    remediation_result = await workflow.execute_child_workflow(
-                        RemediationOrchestratorWorkflow.run,
-                        remediation_input,
-                        id=f"remediation-{workflow.info().workflow_id}",
-                        task_queue=PACKAGEBOT_TASK_QUEUE,
-                    )
-                
-                    parent_results["remediation_workflow_result"] = remediation_result
+
+            if not repositories:
+                workflow.logger.warning("No repositories found in remediation plan, skipping remediation")
+                parent_results["execution_summary"]["status"] = "completed_no_repos"
+            else:
+                skip_repos = input_data.get("skip_repos", [])
+                auto_review = input_data.get("auto_review", True)
+
+                remediation_results = {
+                    "status": "success",
+                    "org": org,
+                    "total_repos": len(repositories),
+                    "successful_repos": 0,
+                    "failed_repos": 0,
+                    "skipped_repos": 0,
+                    "results": [],
+                }
+
+                # Spawn one child workflow per repository (sequential to avoid rate limiting)
+                for idx, repository in enumerate(repositories, 1):
+                    repo_name = repository.get("name", "unknown")
+
+                    # Check if repository should be skipped
+                    if repo_name in skip_repos:
+                        workflow.logger.info(
+                            f"[{idx}/{len(repositories)}] Skipping repository: {repo_name}"
+                        )
+                        remediation_results["skipped_repos"] += 1
+                        remediation_results["results"].append({
+                            "repo_name": repo_name,
+                            "status": "skipped",
+                            "error": "Repository in skip list",
+                        })
+                        continue
+
                     workflow.logger.info(
-                        f"RemediationOrchestratorWorkflow completed: "
-                        f"status={remediation_result.get('status')}"
+                        f"[{idx}/{len(repositories)}] Launching RemediationOrchestratorWorkflow "
+                        f"for {repo_name}"
                     )
-                    
-                    # Update execution summary with remediation results
-                    parent_results["execution_summary"].update({
-                        "remediation_status": remediation_result.get("status"),
-                        "total_repos_processed": remediation_result.get("total_repos", 0),
-                        "successful_remediations": remediation_result.get("successful_repos", 0),
-                        "failed_remediations": remediation_result.get("failed_repos", 0),
-                        "skipped_repos": remediation_result.get("skipped_repos", 0),
-                        "status": "completed_with_remediation"
-                    })
-                
-            except Exception as e:
-                workflow.logger.error(
-                    f"PackagebotWorkflow failed during remediation workflow execution: {str(e)}"
+
+                    try:
+                        repo_result = await workflow.execute_child_workflow(
+                            RemediationOrchestratorWorkflow.run,
+                            {
+                                "org": org,
+                                "repository": repository,
+                                "auto_review": auto_review,
+                            },
+                            id=f"remediation-{repo_name}-{workflow.info().workflow_id}",
+                            task_queue=PACKAGEBOT_TASK_QUEUE,
+                        )
+
+                        remediation_results["results"].append(repo_result)
+
+                        if repo_result.get("status") == "success":
+                            remediation_results["successful_repos"] += 1
+                            workflow.logger.info(
+                                f"[{idx}/{len(repositories)}] {repo_name} completed successfully: "
+                                f"PR={repo_result.get('pr_url')}"
+                            )
+                        else:
+                            remediation_results["failed_repos"] += 1
+                            workflow.logger.warning(
+                                f"[{idx}/{len(repositories)}] {repo_name} failed: "
+                                f"{repo_result.get('error')}"
+                            )
+
+                    except Exception as e:
+                        remediation_results["failed_repos"] += 1
+                        remediation_results["results"].append({
+                            "repo_name": repo_name,
+                            "status": "failure",
+                            "error": f"Child workflow failed: {str(e)}",
+                        })
+                        workflow.logger.error(
+                            f"[{idx}/{len(repositories)}] Child workflow failed for {repo_name}: {str(e)}"
+                        )
+
+                # Determine overall remediation status
+                if remediation_results["failed_repos"] == 0 and remediation_results["skipped_repos"] < remediation_results["total_repos"]:
+                    remediation_results["status"] = "success"
+                elif remediation_results["successful_repos"] > 0:
+                    remediation_results["status"] = "partial"
+                else:
+                    remediation_results["status"] = "failure"
+
+                parent_results["remediation_workflow_result"] = remediation_results
+                workflow.logger.info(
+                    f"All remediation workflows completed: "
+                    f"status={remediation_results['status']}"
                 )
-                parent_results["execution_summary"]["remediation_error"] = str(e)
-                parent_results["execution_summary"]["status"] = "remediation_failed"
-                # Don't raise - allow workflow to complete with partial results
+
+                # Update execution summary with remediation results
+                parent_results["execution_summary"].update({
+                    "remediation_status": remediation_results["status"],
+                    "total_repos_processed": remediation_results["total_repos"],
+                    "successful_remediations": remediation_results["successful_repos"],
+                    "failed_remediations": remediation_results["failed_repos"],
+                    "skipped_repos": remediation_results["skipped_repos"],
+                    "status": "completed_with_remediation",
+                })
         else:
             workflow.logger.info(
                 "Step 2: Remediation disabled, skipping RemediationOrchestratorWorkflow"

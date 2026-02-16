@@ -9,7 +9,7 @@ class JiraSettings(BaseSettings):
     All settings are loaded from environment variables prefixed with JIRA_.
     """
 
-    model_config = {"env_prefix": "JIRA_"}
+    model_config = {"env_prefix": "JIRA_", "env_file": ".env", "env_file_encoding": "utf-8"}
 
     # Required
     url: str

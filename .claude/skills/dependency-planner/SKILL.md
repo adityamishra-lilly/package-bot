@@ -1,7 +1,7 @@
 ---
 name: dependency-planner
 description: Analyzes vulnerability data and creates a detailed dependency update plan. Use when you need to plan updates for security vulnerabilities, identify ecosystems, determine required files, and detect major version changes.
-allowed-tools: Read, Grep, Glob, WebFetch, WebSearch, TodoWrite
+allowed-tools: Read, Grep, Glob, WebFetch, WebSearch, TodoWrite, mcp__github__get_file_contents, mcp__github__search_code, mcp__github__search_repositories, mcp__github__list_commits, mcp__github__search_issues, mcp__github__list_issues
 ---
 
 # Dependency Update Planner
@@ -159,13 +159,13 @@ uv lock --upgrade-package virtualenv==20.28.1
 | [references/ecosystem-detection.md](references/ecosystem-detection.md) | Identifying package managers |
 | [references/major-version-handling.md](references/major-version-handling.md) | Breaking change assessment |
 
-## Ready-to-Use Templates
+## Ready-to-Use Scripts
 
-| Template | Description |
-|----------|-------------|
-| [templates/analyze-vulnerabilities.sh](templates/analyze-vulnerabilities.sh) | Parse and analyze vulnerability JSON |
-| [templates/detect-ecosystem.sh](templates/detect-ecosystem.sh) | Identify package manager from files |
-| [templates/compare-versions.sh](templates/compare-versions.sh) | Compare semver versions |
+| Script | Description |
+|--------|-------------|
+| [scripts/analyze-vulnerabilities.sh](scripts/analyze-vulnerabilities.sh) | Parse and analyze vulnerability JSON |
+| [scripts/detect-ecosystem.sh](scripts/detect-ecosystem.sh) | Identify package manager from files |
+| [scripts/compare-versions.sh](scripts/compare-versions.sh) | Compare semver versions |
 
 ## Anti-Patterns
 

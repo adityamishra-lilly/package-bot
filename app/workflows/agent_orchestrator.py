@@ -1,283 +1,265 @@
 """
-Remediation orchestrator workflow for processing multiple repositories.
+Remediation orchestrator workflow for a single repository.
 
-This workflow orchestrates two separate activities per repository:
+Each instance of this workflow processes one repository through three activities:
 1. execute_dependency_remediation_activity - Updates dependencies, creates branch
 2. execute_pull_request_activity - Creates and reviews PR from the fix branch
+3. execute_jira_ticket_activity - Creates Jira ticket to track PR review (non-critical)
+
+The parent PackagebotWorkflow spawns one instance per repository.
 """
 from datetime import timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
-# Retry policy for dependency remediation activity (3 attempts, 15 min timeout)
+# Retry policy for dependency remediation activity (3 attempts)
 DEPENDENCY_REMEDIATION_RETRY_POLICY = RetryPolicy(
     initial_interval=timedelta(seconds=10),
     maximum_interval=timedelta(minutes=1),
     maximum_attempts=3,
 )
 
-# Retry policy for pull request activity (2 attempts, 5 min timeout)
+# Retry policy for pull request activity (2 attempts)
 PULL_REQUEST_RETRY_POLICY = RetryPolicy(
     initial_interval=timedelta(seconds=5),
     maximum_interval=timedelta(seconds=30),
     maximum_attempts=2,
 )
 
+# Retry policy for Jira ticket activity (2 attempts, non-critical)
+JIRA_TICKET_RETRY_POLICY = RetryPolicy(
+    initial_interval=timedelta(seconds=5),
+    maximum_interval=timedelta(seconds=30),
+    maximum_attempts=2,
+)
+
+
 @workflow.defn
 class RemediationOrchestratorWorkflow:
     """
-    Orchestrator workflow for executing agent remediation across multiple repositories.
-    
+    Orchestrator workflow for executing agent remediation on a single repository.
+
     This workflow:
-    1. Receives a remediation plan with multiple repositories
-    2. Executes agent remediation for each repository sequentially
-    3. Tracks success/failure per repository
-    4. Returns aggregated results
+    1. Receives a single repository with its security alerts
+    2. Executes dependency remediation, PR creation, and Jira ticket creation
+    3. Returns the result for this repository
     """
 
     @workflow.run
     async def run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute remediation for all repositories in the plan.
+        Execute remediation for a single repository.
 
-        For each repository, executes two activities in sequence:
+        Executes three activities in sequence:
         1. execute_dependency_remediation_activity - Updates dependencies
         2. execute_pull_request_activity - Creates PR from fix branch
+        3. execute_jira_ticket_activity - Creates Jira ticket (non-critical)
 
         Args:
             input_data: Dictionary containing:
                 {
                     "org": "AgentPOC-Org",
-                    "remediation_plan_path": "dependabot-remediation-plan/remediation-plan.json",
-                    "repositories": [
-                        {
-                            "name": "python-uv-test",
-                            "html_url": "...",
-                            "security_alerts": [...]
-                        },
-                        ...
-                    ],
-                    "skip_repos": [],  # optional
+                    "repository": {
+                        "name": "python-uv-test",
+                        "html_url": "...",
+                        "security_alerts": [...]
+                    },
                     "auto_review": true  # optional, default true
                 }
 
         Returns:
             Dictionary containing:
             {
-                "status": "success" | "partial" | "failure",
-                "total_repos": 5,
-                "successful_repos": 3,
-                "failed_repos": 2,
-                "results": [
-                    {
-                        "repo_name": "python-uv-test",
-                        "status": "success",
-                        "pr_url": "https://github.com/.../pull/123",
-                        "pr_number": 123,
-                        "branch_name": "fix/security-alerts-...",
-                        "major_version_updates": [...],
-                        "remediation_duration_ms": 45000,
-                        "pr_duration_ms": 15000,
-                        "error": null
-                    },
-                    ...
-                ]
+                "repo_name": "python-uv-test",
+                "status": "success" | "failure",
+                "pr_url": "https://github.com/.../pull/123",
+                "pr_number": 123,
+                "branch_name": "fix/security-alerts-...",
+                "major_version_updates": [...],
+                "remediation_duration_ms": 45000,
+                "pr_duration_ms": 15000,
+                "jira_key": "PROJ-456",
+                "jira_url": "https://...",
+                "jira_duration_ms": 10000,
+                "error": null,
+                "total_cost_usd": 0.05
             }
         """
-
-        workflow.logger.info(
-            f"Starting RemediationOrchestratorWorkflow with input: {input_data}"
-        )
-
         org = input_data.get("org")
-        repositories = input_data.get("repositories", [])
-        skip_repos = input_data.get("skip_repos", [])
+        repository = input_data.get("repository", {})
         auto_review = input_data.get("auto_review", True)
+        repo_name = repository.get("name", "unknown")
 
         if not org:
             raise ValueError("Missing required parameter: org")
+        if not repository:
+            raise ValueError("Missing required parameter: repository")
 
         workflow.logger.info(
-            f"Processing {len(repositories)} repositories for org: {org}"
+            f"Starting RemediationOrchestratorWorkflow for {org}/{repo_name}"
         )
 
-        results = {
-            "status": "success",
-            "org": org,
-            "total_repos": len(repositories),
-            "successful_repos": 0,
-            "failed_repos": 0,
-            "skipped_repos": 0,
-            "results": []
+        result = {
+            "repo_name": repo_name,
+            "status": "failure",
+            "pr_url": None,
+            "pr_number": None,
+            "branch_name": None,
+            "major_version_updates": [],
+            "remediation_duration_ms": 0,
+            "pr_duration_ms": 0,
+            "jira_key": None,
+            "jira_url": None,
+            "jira_duration_ms": 0,
+            "error": None,
+            "total_cost_usd": None,
         }
 
-        # Process each repository sequentially
-        for idx, repository in enumerate(repositories, 1):
-            repo_name = repository.get("name", "unknown")
-
-            # Check if repository should be skipped
-            if repo_name in skip_repos:
-                workflow.logger.info(
-                    f"[{idx}/{len(repositories)}] Skipping repository: {repo_name}"
-                )
-                results["skipped_repos"] += 1
-                results["results"].append({
-                    "repo_name": repo_name,
-                    "status": "skipped",
-                    "pr_url": None,
-                    "pr_number": None,
-                    "branch_name": None,
-                    "major_version_updates": [],
-                    "remediation_duration_ms": 0,
-                    "pr_duration_ms": 0,
-                    "error": "Repository in skip list"
-                })
-                continue
-
+        try:
+            # Step 1: Execute dependency remediation activity
             workflow.logger.info(
-                f"[{idx}/{len(repositories)}] Processing repository: {repo_name}"
+                f"Step 1: Running dependency remediation for {repo_name}"
             )
 
-            repo_result = {
-                "repo_name": repo_name,
-                "status": "failure",
-                "pr_url": None,
-                "pr_number": None,
-                "branch_name": None,
-                "major_version_updates": [],
-                "remediation_duration_ms": 0,
-                "pr_duration_ms": 0,
-                "error": None,
-                "total_cost_usd": None
+            remediation_payload = {
+                "org": org,
+                "repository": repository,
             }
 
-            try:
-                # Step 1: Execute dependency remediation activity
+            remediation_result = await workflow.execute_activity(
+                "execute_dependency_remediation_activity",
+                remediation_payload,
+                start_to_close_timeout=timedelta(minutes=30),
+                retry_policy=DEPENDENCY_REMEDIATION_RETRY_POLICY,
+                heartbeat_timeout=timedelta(minutes=30),
+            )
+
+            result["remediation_duration_ms"] = remediation_result.get("duration_ms", 0)
+            result["branch_name"] = remediation_result.get("branch_name")
+            result["major_version_updates"] = remediation_result.get("major_version_updates", [])
+
+            # Check if remediation was successful and produced a branch
+            if remediation_result.get("status") != "success":
+                result["error"] = remediation_result.get("error", "Dependency remediation failed")
+                result["total_cost_usd"] = remediation_result.get("total_cost_usd")
+                workflow.logger.warning(
+                    f"Dependency remediation failed for {repo_name}: {result['error']}"
+                )
+                return result
+
+            branch_name = remediation_result.get("branch_name")
+            if not branch_name:
+                result["error"] = "No branch created by remediation"
+                result["total_cost_usd"] = remediation_result.get("total_cost_usd")
+                workflow.logger.warning(f"No branch created for {repo_name}")
+                return result
+
+            workflow.logger.info(
+                f"Dependency remediation successful for {repo_name}: branch={branch_name}"
+            )
+
+            # Step 2: Execute pull request activity
+            workflow.logger.info(f"Step 2: Creating pull request for {repo_name}")
+
+            pr_payload = {
+                "org": org,
+                "repo_name": repo_name,
+                "branch_name": branch_name,
+                "vulnerability_data": remediation_result.get("vulnerability_data", {}),
+                "workspace_dir": remediation_result.get("workspace_dir"),
+                "major_version_updates": remediation_result.get("major_version_updates", []),
+                "auto_review": auto_review,
+            }
+
+            pr_result = await workflow.execute_activity(
+                "execute_pull_request_activity",
+                pr_payload,
+                start_to_close_timeout=timedelta(minutes=30),
+                retry_policy=PULL_REQUEST_RETRY_POLICY,
+                heartbeat_timeout=timedelta(minutes=30),
+            )
+
+            result["pr_duration_ms"] = pr_result.get("duration_ms", 0)
+            result["pr_url"] = pr_result.get("pr_url")
+            result["pr_number"] = pr_result.get("pr_number")
+
+            # Calculate total cost
+            remediation_cost = remediation_result.get("total_cost_usd") or 0
+            pr_cost = pr_result.get("total_cost_usd") or 0
+            result["total_cost_usd"] = remediation_cost + pr_cost
+
+            if pr_result.get("status") == "success" and pr_result.get("pr_url"):
+                result["status"] = "success"
                 workflow.logger.info(
-                    f"[{idx}/{len(repositories)}] Step 1: Running dependency remediation for {repo_name}"
+                    f"Successfully remediated {repo_name}: PR={pr_result.get('pr_url')}"
                 )
 
-                remediation_payload = {
-                    "org": org,
-                    "repository": repository
-                }
-
-                remediation_result = await workflow.execute_activity(
-                    "execute_dependency_remediation_activity",
-                    remediation_payload,
-                    start_to_close_timeout=timedelta(minutes=30),
-                    retry_policy=DEPENDENCY_REMEDIATION_RETRY_POLICY,
-                    heartbeat_timeout=timedelta(minutes=30),
-                )
-
-                repo_result["remediation_duration_ms"] = remediation_result.get("duration_ms", 0)
-                repo_result["branch_name"] = remediation_result.get("branch_name")
-                repo_result["major_version_updates"] = remediation_result.get("major_version_updates", [])
-
-                # Check if remediation was successful and produced a branch
-                if remediation_result.get("status") != "success":
-                    repo_result["error"] = remediation_result.get("error", "Dependency remediation failed")
-                    repo_result["total_cost_usd"] = remediation_result.get("total_cost_usd")
-                    results["failed_repos"] += 1
-                    results["results"].append(repo_result)
-                    workflow.logger.warning(
-                        f"[{idx}/{len(repositories)}] Dependency remediation failed for {repo_name}: "
-                        f"{repo_result['error']}"
-                    )
-                    continue
-
-                branch_name = remediation_result.get("branch_name")
-                if not branch_name:
-                    repo_result["error"] = "No branch created by remediation"
-                    repo_result["total_cost_usd"] = remediation_result.get("total_cost_usd")
-                    results["failed_repos"] += 1
-                    results["results"].append(repo_result)
-                    workflow.logger.warning(
-                        f"[{idx}/{len(repositories)}] No branch created for {repo_name}"
-                    )
-                    continue
-
-                workflow.logger.info(
-                    f"[{idx}/{len(repositories)}] Dependency remediation successful for {repo_name}: "
-                    f"branch={branch_name}"
-                )
-
-                # Step 2: Execute pull request activity
-                workflow.logger.info(
-                    f"[{idx}/{len(repositories)}] Step 2: Creating pull request for {repo_name}"
-                )
-
-                pr_payload = {
-                    "org": org,
-                    "repo_name": repo_name,
-                    "branch_name": branch_name,
-                    "vulnerability_data": remediation_result.get("vulnerability_data", {}),
-                    "workspace_dir": remediation_result.get("workspace_dir"),
-                    "major_version_updates": remediation_result.get("major_version_updates", []),
-                    "auto_review": auto_review
-                }
-
-                pr_result = await workflow.execute_activity(
-                    "execute_pull_request_activity",
-                    pr_payload,
-                    start_to_close_timeout=timedelta(minutes=30),
-                    retry_policy=PULL_REQUEST_RETRY_POLICY,
-                    heartbeat_timeout=timedelta(minutes=30),
-                )
-
-                repo_result["pr_duration_ms"] = pr_result.get("duration_ms", 0)
-                repo_result["pr_url"] = pr_result.get("pr_url")
-                repo_result["pr_number"] = pr_result.get("pr_number")
-
-                # Calculate total cost
-                remediation_cost = remediation_result.get("total_cost_usd") or 0
-                pr_cost = pr_result.get("total_cost_usd") or 0
-                repo_result["total_cost_usd"] = remediation_cost + pr_cost
-
-                if pr_result.get("status") == "success" and pr_result.get("pr_url"):
-                    repo_result["status"] = "success"
-                    results["successful_repos"] += 1
+                # Step 3: Execute Jira ticket activity (non-critical)
+                try:
                     workflow.logger.info(
-                        f"[{idx}/{len(repositories)}] Successfully remediated {repo_name}: "
-                        f"PR={pr_result.get('pr_url')}"
+                        f"Step 3: Creating Jira ticket for {repo_name}"
                     )
-                else:
-                    repo_result["error"] = pr_result.get("error", "PR creation failed")
-                    results["failed_repos"] += 1
+
+                    jira_payload = {
+                        "org": org,
+                        "repo_name": repo_name,
+                        "pr_url": pr_result.get("pr_url"),
+                        "pr_number": pr_result.get("pr_number"),
+                        "branch_name": branch_name,
+                        "vulnerability_data": remediation_result.get("vulnerability_data", {}),
+                        "workspace_dir": remediation_result.get("workspace_dir"),
+                        "major_version_updates": remediation_result.get("major_version_updates", []),
+                    }
+
+                    jira_result = await workflow.execute_activity(
+                        "execute_jira_ticket_activity",
+                        jira_payload,
+                        start_to_close_timeout=timedelta(minutes=30),
+                        retry_policy=JIRA_TICKET_RETRY_POLICY,
+                        heartbeat_timeout=timedelta(minutes=30),
+                    )
+
+                    result["jira_duration_ms"] = jira_result.get("duration_ms", 0)
+                    result["jira_key"] = jira_result.get("jira_key")
+                    result["jira_url"] = jira_result.get("jira_url")
+
+                    # Add Jira cost to total
+                    jira_cost = jira_result.get("total_cost_usd") or 0
+                    result["total_cost_usd"] = (result["total_cost_usd"] or 0) + jira_cost
+
+                    if jira_result.get("status") == "success":
+                        workflow.logger.info(
+                            f"Jira ticket created for {repo_name}: "
+                            f"{jira_result.get('jira_key')}"
+                        )
+                    else:
+                        workflow.logger.warning(
+                            f"Jira ticket creation failed for {repo_name}: "
+                            f"{jira_result.get('error', 'Unknown error')} (non-critical)"
+                        )
+                except Exception as jira_err:
+                    # Jira failure is non-critical - don't change repo status
                     workflow.logger.warning(
-                        f"[{idx}/{len(repositories)}] PR creation failed for {repo_name}: "
-                        f"{repo_result['error']}"
+                        f"Jira ticket activity failed for {repo_name}: "
+                        f"{str(jira_err)} (non-critical, PR was created successfully)"
                     )
-
-                results["results"].append(repo_result)
-
-            except Exception as e:
-                # Handle activity execution failure
-                results["failed_repos"] += 1
-                error_msg = str(e)
-                repo_result["error"] = f"Activity execution failed: {error_msg}"
-
-                workflow.logger.error(
-                    f"[{idx}/{len(repositories)}] Activity execution failed for {repo_name}: {error_msg}"
+            else:
+                result["error"] = pr_result.get("error", "PR creation failed")
+                workflow.logger.warning(
+                    f"PR creation failed for {repo_name}: {result['error']}"
                 )
 
-                results["results"].append(repo_result)
-        
-        # Determine overall status
-        if results["failed_repos"] == 0 and results["skipped_repos"] < results["total_repos"]:
-            results["status"] = "success"
-        elif results["successful_repos"] > 0:
-            results["status"] = "partial"
-        else:
-            results["status"] = "failure"
-        
+        except Exception as e:
+            error_msg = str(e)
+            result["error"] = f"Activity execution failed: {error_msg}"
+            workflow.logger.error(
+                f"Activity execution failed for {repo_name}: {error_msg}"
+            )
+
         workflow.logger.info(
-            f"RemediationOrchestratorWorkflow completed: "
-            f"status={results['status']}, "
-            f"successful={results['successful_repos']}, "
-            f"failed={results['failed_repos']}, "
-            f"skipped={results['skipped_repos']}"
+            f"RemediationOrchestratorWorkflow completed for {repo_name}: "
+            f"status={result['status']}"
         )
-        
-        return results
+
+        return result

@@ -5,6 +5,8 @@ Creates pull requests with proper formatting and documentation.
 
 from claude_agent_sdk import AgentDefinition
 
+from app.mcp.github_mcp import get_github_mcp_tools
+
 CREATOR_APPROVED_TOOLS = [
     "Read",
     "Bash",
@@ -12,7 +14,7 @@ CREATOR_APPROVED_TOOLS = [
     "Glob",
     "TodoWrite",
     "Skill",
-]
+] + get_github_mcp_tools()
 
 creator_agent = AgentDefinition(
     description="Creator agent that creates well-formatted pull requests for security updates",
