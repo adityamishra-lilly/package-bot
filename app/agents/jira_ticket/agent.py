@@ -23,7 +23,7 @@ from typing import Dict, Any, List
 
 from app.mcp.github_mcp import get_github_mcp_config, get_github_mcp_tools
 from app.mcp.jira_mcp import get_jira_mcp_config, get_jira_mcp_tools
-from app.utils.agentlogging import TranscriptWriter, ToolCallJsonlLogger
+from app.utils.agentlogging import TranscriptWriter, ObservabilityLogger
 
 from .subagents import (
     creator_agent,
@@ -217,7 +217,7 @@ After creation, have the reviewer-agent verify the ticket quality.
 
     try:
         with TranscriptWriter(transcript_file) as transcript, \
-             ToolCallJsonlLogger(log_dir) as tool_logger:
+             ObservabilityLogger(log_dir, transcript, agent_context="jira_ticket") as tool_logger:
 
             options = ClaudeAgentOptions(
                 max_turns=500,

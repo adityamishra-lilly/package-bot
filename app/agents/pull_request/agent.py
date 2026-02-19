@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 from app.mcp.github_mcp import get_github_mcp_config, get_github_mcp_tools
-from app.utils.agentlogging import TranscriptWriter, ToolCallJsonlLogger
+from app.utils.agentlogging import TranscriptWriter, ObservabilityLogger
 
 from .subagents import (
     creator_agent,
@@ -160,7 +160,7 @@ Use the vulnerability data to create a comprehensive PR description.
 
     try:
         with TranscriptWriter(transcript_file) as transcript, \
-             ToolCallJsonlLogger(log_dir) as tool_logger:
+             ObservabilityLogger(log_dir, transcript, agent_context="pull_request") as tool_logger:
 
             options = ClaudeAgentOptions(
                 max_turns=500,

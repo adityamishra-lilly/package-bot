@@ -5,3 +5,5 @@ __pycache__/
 logs/
 claude-technical-writer-main/
 workspace/
+settings.json
+settings.local.json

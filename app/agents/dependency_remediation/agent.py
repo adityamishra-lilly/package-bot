@@ -24,7 +24,7 @@ from typing import Dict, Any
 import re
 
 from app.mcp.github_mcp import get_github_mcp_config, get_github_mcp_tools
-from app.utils.agentlogging import TranscriptWriter, ToolCallJsonlLogger
+from app.utils.agentlogging import TranscriptWriter, ObservabilityLogger
 
 from .subagents import (
     planner_agent,
@@ -168,7 +168,7 @@ Report the final status including branch name, commit hash, and any major versio
 
     try:
         with TranscriptWriter(transcript_file) as transcript, \
-             ToolCallJsonlLogger(log_dir) as tool_logger:
+             ObservabilityLogger(log_dir, transcript, agent_context="remediation") as tool_logger:
 
             options = ClaudeAgentOptions(
                 max_turns=1000,
