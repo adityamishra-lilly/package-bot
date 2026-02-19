@@ -162,11 +162,13 @@ class ObservabilityLogger:
         log_dir: Path,
         transcript: TranscriptWriter,
         agent_context: str = "agent",
+        workspace_dir: Optional[Path] = None,
     ):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.transcript = transcript
         self.agent_context = agent_context
+        self.workspace_dir = Path(workspace_dir) if workspace_dir else None
 
         # Backward-compat: keep tool_calls.jsonl
         self.jsonl_file = open(self.log_dir / "tool_calls.jsonl", "w", encoding="utf-8")
@@ -281,6 +283,33 @@ class ObservabilityLogger:
             "phase": phase_label,
         })
 
+    @staticmethod
+    def _extract_text_from_response(tool_response: Any) -> str:
+        """Extract human-readable text from a Task tool response.
+
+        The Task tool returns a dict like:
+          {"status": "completed", "content": [{"type": "text", "text": "..."}], ...}
+        We extract and concatenate the text blocks. Falls back to str() for
+        unexpected formats.
+        """
+        if not tool_response:
+            return ""
+        if isinstance(tool_response, dict):
+            content_blocks = tool_response.get("content")
+            if isinstance(content_blocks, list):
+                texts = []
+                for block in content_blocks:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        texts.append(block.get("text", ""))
+                if texts:
+                    return "\n\n".join(texts)
+            # If no content blocks found but there's a 'result' string, use that
+            result = tool_response.get("result")
+            if isinstance(result, str):
+                return result
+        # Fallback: convert to string but skip if it's the raw dict repr
+        return str(tool_response)
+
     def _handle_task_post(self, tool_response: Any, tool_use_id: Optional[str]):
         """Handle PostToolUse for Task tool (subagent completion)."""
         subagent_type = self._subagent_call_ids.pop(tool_use_id, None) if tool_use_id else None
@@ -295,11 +324,20 @@ class ObservabilityLogger:
         if self._phase_start_time:
             duration_ms = int((datetime.now() - self._phase_start_time).total_seconds() * 1000)
 
-        # Save full output
-        output_text = str(tool_response) if tool_response else ""
+        # Extract actual text content from the Task response
+        output_text = self._extract_text_from_response(tool_response)
         output_file = f"{subagent_type}_output.md"
         if output_text:
             self._write_subagent_output(subagent_type, output_text)
+
+        # For planner-agent, also write to workspace as remediation-plan.md
+        if subagent_type == "planner-agent" and output_text and self.workspace_dir:
+            try:
+                plan_path = self.workspace_dir / "remediation-plan.md"
+                with open(plan_path, "w", encoding="utf-8") as f:
+                    f.write(output_text)
+            except (ValueError, OSError):
+                pass
 
         # Phase completion banner
         banner = (

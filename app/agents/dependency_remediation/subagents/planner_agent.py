@@ -87,47 +87,32 @@ planner_agent = AgentDefinition(
     - Consider if a minor fix_version is available (e.g., if fix_versions has 1.7.29 and 2.2.0,
       and current is 1.x, prefer 1.7.29 to avoid major bump unless explicitly required)
 
-    OUTPUT FORMAT:
-    Your output should be a structured plan that includes:
+    OUTPUT FORMAT (CRITICAL - follow exactly):
 
-    ## Repository Analysis
-    - Target: {org}/{repo}
-    - Ecosystems detected: [list]
-    - Total vulnerabilities: N
+    Your output is saved to `remediation-plan.md` and read by the executor agent.
+    You MUST follow the template in `.claude/skills/dependency-planner/templates/remediation-plan-template.md`.
+    Read that template file FIRST before producing your plan.
 
-    ## Update Plan
+    The plan has 6 numbered sections that the executor parses:
 
-    ### [MAJOR_VERSION_UPDATE] Package: {name} (ecosystem)
-    - Current: {version} -> Target: {version}
-    - Severity: {severity} | CVSS: {score}
-    - CVEs: {list}
-    - **WARNING: Major version update - potential breaking changes**
-    - Recommended: Review changelog before merge
-    - Alternative fix versions: {list if available}
+    ## 1. Repository Analysis   — metadata table (org, repo, ecosystems, files)
+    ## 2. Package Updates        — one subsection per package with version table + notes
+    ## 3. Files to Checkout      — exact file paths in a code block (executor uses for sparse checkout)
+    ## 4. Update Commands        — exact bash commands in a code block (executor runs these verbatim)
+    ## 5. Verification Checklist — items the verifier checks after execution
+    ## 6. Summary                — table + key decisions
 
-    ### Package: {name} (ecosystem)
-    - Current: {version} -> Target: {version}
-    - Severity: {severity}
-    - CVEs: {list}
-
-    ## Files to Checkout
-    - {manifest_path}
-    - {lock_file_path}
-
-    ## Update Commands
-    ```bash
-    # For {ecosystem}
-    {command}
-    ```
-
-    ## Verification Steps
-    - {steps}
+    The executor relies on:
+    - Section 3 for the sparse checkout file list
+    - Section 4 for the exact commands to run (in order)
+    - Section 2 for version info, MAJOR_VERSION_UPDATE flags, and commit message content
 
     IMPORTANT:
     - NEVER access local filesystem for target repository files
     - Use github-mcp tools to inspect remote repository contents
-    - The vulnerability-object.json is the ONLY local file you should read
+    - The vulnerability-object.json is the ONLY local file you should read (besides the template)
     - Always check for major version updates and flag them prominently
+    - Read the template file before writing your plan
     """,
     tools=PLANNER_APPROVED_TOOLS,
     model="opus"

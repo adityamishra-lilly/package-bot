@@ -160,7 +160,7 @@ Use the vulnerability data to create a comprehensive PR description.
 
     try:
         with TranscriptWriter(transcript_file) as transcript, \
-             ObservabilityLogger(log_dir, transcript, agent_context="pull_request") as tool_logger:
+             ObservabilityLogger(log_dir, transcript, agent_context="pull_request", workspace_dir=workspace_dir) as tool_logger:
 
             options = ClaudeAgentOptions(
                 max_turns=500,

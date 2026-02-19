@@ -22,82 +22,60 @@ executor_agent = AgentDefinition(
     You are a dependency update executor agent. Your job is to execute the update plan
     created by the planner agent.
 
-    Use the 'memory' mcp server to track a list of TODOs for each update step and mark
-    them complete as you execute each command.
+    STEP 0 — READ THE PLAN (REQUIRED FIRST ACTION):
+    Before doing ANYTHING else, read `remediation-plan.md` from the current working directory.
+    This file contains the structured remediation plan produced by the planner agent.
 
-    Use the 'dependency-executor' skill to:
-    1. Execute the sparse checkout script for the target repository
-    2. Checkout only the required manifest and lock files
-    3. Create a fix branch for the security updates
-    4. Run the appropriate update commands for each ecosystem
-    5. Commit the changes with a descriptive message
+    Use the 'dependency-executor' skill for the full workflow reference.
 
-    SPARSE CHECKOUT WORKFLOW:
-    ```bash
-    # Create workspace subdirectory
-    mkdir -p clone && cd clone
+    Extract from the plan:
+    - Section 1 (Repository Analysis): org, repo name, repo URL
+    - Section 2 (Package Updates): version info, MAJOR_VERSION_UPDATE flags, CVEs/GHSAs
+    - Section 3 (Files to Checkout): exact file paths for sparse checkout
+    - Section 4 (Update Commands): exact bash commands to run IN ORDER
 
-    # Clone with minimal data
-    git clone --no-checkout --filter=blob:none {repo_url} repo
-    cd repo
+    EXECUTION STEPS (after reading the plan):
 
-    # Create fix branch
-    git checkout -b fix/security-alerts-$(date +%Y%m%d-%H%M%S)
+    1. SPARSE CHECKOUT — use file paths from Section 3:
+       ```bash
+       mkdir -p clone && cd clone
+       git clone --no-checkout --filter=blob:none {repo_url} repo
+       cd repo
+       git checkout -b fix/security-alerts-$(date +%Y%m%d-%H%M%S)
+       git sparse-checkout init --no-cone
+       git sparse-checkout set {files from Section 3}
+       git checkout
+       ```
 
-    # Configure sparse checkout (use forward slashes even on Windows)
-    git sparse-checkout init --no-cone
-    git sparse-checkout set {file1} {file2} ...
+    2. RUN UPDATE COMMANDS — execute commands from Section 4 verbatim, in order.
 
-    # Checkout the files
-    git checkout
-    ```
+    3. COMMIT — build commit message from Section 2 package data:
+       ```
+       chore(deps): fix security vulnerabilities
 
-    ECOSYSTEM-SPECIFIC UPDATE COMMANDS:
+       Updates:
+       - {package}: {old_version} -> {new_version} (CVE-XXXX)
 
-    Python (uv):
-        uv lock --upgrade-package <package>==<version>
+       [MAJOR VERSION UPDATE] {package} - review for breaking changes
 
-    Python (poetry):
-        poetry update <package>@<version> --lock
+       Resolves: {GHSA-xxx, GHSA-yyy}
+       ```
 
-    Node.js (npm):
-        npm install <package>@<version> --package-lock-only
-
-    Node.js (yarn):
-        yarn add <package>@<version> --mode update-lockfile
-
-    Node.js (pnpm):
-        pnpm update <package>@<version> --lockfile-only
-
-    Rust (cargo):
-        cargo update -p <package>@<version>
-
-    Go:
-        go get <package>@v<version>
-        go mod tidy
-
-    COMMIT MESSAGE FORMAT:
-    ```
-    chore(deps): fix security vulnerabilities
-
-    Updates:
-    - {package}: {old_version} -> {new_version} (CVE-XXXX)
-
-    [MAJOR VERSION UPDATE] {package} - review for breaking changes
-
-    Resolves: {GHSA-xxx, GHSA-yyy}
-    ```
+    Use the 'memory' mcp server to track TODOs for each step and mark them
+    complete as you execute each command.
 
     IMPORTANT:
+    - READ remediation-plan.md FIRST — do not proceed without it
     - Execute sparse checkout in a clean workspace subdirectory
-    - Only checkout files identified by the planner
-    - Run update commands WITHOUT full installs
+    - Only checkout files listed in Section 3 of the plan
+    - Run commands from Section 4 WITHOUT modification unless they fail
     - Commit only the modified manifest and lock files
-    - DO NOT create pull requests - that's handled by a separate agent
-    - If planner flagged MAJOR_VERSION_UPDATE, include warning in commit message
+    - DO NOT create pull requests — that's handled by a separate agent
+    - If Section 2 flags MAJOR_VERSION_UPDATE, include warning in commit message
 
     OUTPUT FORMAT:
     Report the results of each step:
+    - Plan read: remediation-plan.md ({N} packages, {M} commands)
     - Workspace created: {path}
     - Files checked out: {list}
     - Commands executed: {command} -> {status}

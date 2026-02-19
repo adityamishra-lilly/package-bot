@@ -217,7 +217,7 @@ After creation, have the reviewer-agent verify the ticket quality.
 
     try:
         with TranscriptWriter(transcript_file) as transcript, \
-             ObservabilityLogger(log_dir, transcript, agent_context="jira_ticket") as tool_logger:
+             ObservabilityLogger(log_dir, transcript, agent_context="jira_ticket", workspace_dir=workspace_dir) as tool_logger:
 
             options = ClaudeAgentOptions(
                 max_turns=500,

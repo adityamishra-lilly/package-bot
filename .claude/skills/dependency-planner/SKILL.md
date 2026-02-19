@@ -118,39 +118,16 @@ go mod tidy
 
 ## Output Plan Format
 
-```markdown
-## Repository Analysis
-- Target: {org}/{repo}
-- Ecosystems: [pip, npm]
-- Total vulnerabilities: 5
+**You MUST follow the template exactly:** [templates/remediation-plan-template.md](templates/remediation-plan-template.md)
 
-## Update Plan
+The plan is saved to `remediation-plan.md` in the workspace directory. The executor agent
+reads this file as its primary input, so the structure must be consistent and complete.
 
-### [MAJOR_VERSION_UPDATE] Package: containerd (go)
-- Current: 1.6.0 -> Target: 2.2.0
-- Severity: high | CVSS: 7.3
-- CVEs: CVE-2024-25621
-- **WARNING: Major version update - breaking changes possible**
-- Alternative: 1.7.29 (minor version fix available)
-
-### Package: virtualenv (pip)
-- Current: 20.0.0 -> Target: 20.28.1
-- Severity: medium
-- CVEs: CVE-2025-68146
-
-## Files to Checkout
-- pyproject.toml
-- uv.lock
-
-## Update Commands
-```bash
-uv lock --upgrade-package virtualenv==20.28.1
-```
-
-## Verification Steps
-- Check uv.lock contains virtualenv@20.28.1
-- Verify no unintended changes
-```
+Key sections the executor parses:
+1. **Section 3 (Files to Checkout)** -- exact file paths for sparse checkout
+2. **Section 4 (Update Commands)** -- exact bash commands to run, in order
+3. **Section 2 (Package Updates)** -- version info for commit message and major version flags
+4. **Section 6 (Summary)** -- quick reference table
 
 ## Deep-Dive Documentation
 
@@ -158,6 +135,12 @@ uv lock --upgrade-package virtualenv==20.28.1
 |-----------|-------------|
 | [references/ecosystem-detection.md](references/ecosystem-detection.md) | Identifying package managers |
 | [references/major-version-handling.md](references/major-version-handling.md) | Breaking change assessment |
+
+## Templates
+
+| Template | Description |
+|----------|-------------|
+| [templates/remediation-plan-template.md](templates/remediation-plan-template.md) | **Required** output format for the plan (shared with executor) |
 
 ## Ready-to-Use Scripts
 

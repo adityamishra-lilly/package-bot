@@ -6,30 +6,53 @@ allowed-tools: Read, Bash, Write, MultiEdit, Glob, Grep, TodoWrite
 
 # Dependency Update Executor
 
+## Step 0: Read the Remediation Plan (REQUIRED FIRST STEP)
+
+Before doing anything else, read `remediation-plan.md` from the current working directory.
+This file was produced by the planner agent and contains the structured plan you must follow.
+
+```
+Read remediation-plan.md
+```
+
+The plan follows the template at `.claude/skills/dependency-planner/templates/remediation-plan-template.md`.
+Extract these sections:
+
+| Plan Section | What You Need |
+|-------------|---------------|
+| **Section 3: Files to Checkout** | Exact file paths for sparse checkout |
+| **Section 4: Update Commands** | Exact bash commands to run, in order |
+| **Section 2: Package Updates** | Version info + MAJOR_VERSION_UPDATE flags for commit message |
+| **Section 1: Repository Analysis** | Org, repo name, and repository URL |
+
 ## Core Workflow
 
-Every dependency update execution follows this pattern:
+After reading the plan, follow this execution pattern:
 
-1. **Setup**: Create workspace subdirectory
-2. **Clone**: Sparse checkout only required files
-3. **Branch**: Create fix branch for changes
-4. **Update**: Run ecosystem-specific update commands
-5. **Commit**: Commit changes with descriptive message
+1. **Read Plan**: Parse `remediation-plan.md` (Section 3 for files, Section 4 for commands)
+2. **Setup**: Create workspace subdirectory
+3. **Clone**: Sparse checkout only files listed in Section 3
+4. **Branch**: Create fix branch for changes
+5. **Update**: Run exact commands from Section 4 in order
+6. **Commit**: Commit changes with version info from Section 2
 
 ```bash
-# Step 1: Create workspace
+# Step 1: Read the plan
+Read remediation-plan.md
+
+# Step 2: Create workspace
 mkdir -p clone && cd clone
 
-# Step 2: Sparse checkout
+# Step 3: Sparse checkout (files from Section 3)
 ./scripts/sparse-checkout.sh https://github.com/org/repo pyproject.toml uv.lock
 
-# Step 3: Create branch
+# Step 4: Create branch
 git checkout -b fix/security-alerts-$(date +%Y%m%d-%H%M%S)
 
-# Step 4: Update packages
+# Step 5: Run update commands (from Section 4)
 ./scripts/update-pip.sh virtualenv 20.28.1
 
-# Step 5: Commit
+# Step 6: Commit (version info from Section 2)
 git add pyproject.toml uv.lock
 git commit -m "chore(deps): fix security vulnerabilities"
 ```

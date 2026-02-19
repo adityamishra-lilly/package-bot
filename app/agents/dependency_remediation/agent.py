@@ -107,17 +107,22 @@ async def run_dependency_remediation_agent(
     1. PLANNING PHASE (planner-agent):
        - Call the planner-agent to analyze vulnerability-object.json
        - The planner will identify ecosystems, required files, and update commands
+       - The planner outputs a structured plan following the template in
+         .claude/skills/dependency-planner/templates/remediation-plan-template.md
+       - The plan is automatically saved to `remediation-plan.md` in the workspace
        - Pay attention to MAJOR_VERSION_UPDATE flags - these need careful handling
        - Review the plan before proceeding
 
     2. EXECUTION PHASE (executor-agent):
-       - Call the executor-agent with the plan from step 1
-       - The executor will perform sparse checkout and run update commands
+       - Call the executor-agent to perform the updates
+       - The executor reads `remediation-plan.md` as its first step (this is automatic)
+       - It uses Section 3 (Files to Checkout) and Section 4 (Update Commands) from the plan
        - Monitor for any errors during execution
        - Note the branch name and commit hash
 
     3. VERIFICATION PHASE (verifier-agent):
        - Call the verifier-agent to validate the updates
+       - The verifier can reference Section 5 (Verification Checklist) from the plan
        - Ensure all packages are at expected versions
        - Verify major version updates are properly documented
        - Confirm the branch is ready for PR creation
@@ -128,6 +133,7 @@ async def run_dependency_remediation_agent(
     - Create sparse clone in a subdirectory, not current directory
     - DO NOT create pull requests - that's handled separately
     - If any phase fails, report the failure and stop
+    - The planner's output is saved to remediation-plan.md automatically
 
     OUTPUT:
     After all phases complete, summarize:
@@ -168,7 +174,7 @@ Report the final status including branch name, commit hash, and any major versio
 
     try:
         with TranscriptWriter(transcript_file) as transcript, \
-             ObservabilityLogger(log_dir, transcript, agent_context="remediation") as tool_logger:
+             ObservabilityLogger(log_dir, transcript, agent_context="remediation", workspace_dir=workspace_dir) as tool_logger:
 
             options = ClaudeAgentOptions(
                 max_turns=1000,
