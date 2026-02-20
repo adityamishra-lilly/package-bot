@@ -6,6 +6,9 @@ The executor agent reads this plan from `remediation-plan.md` in the workspace d
 Both agents rely on the section headers and structure below. Do NOT rename sections,
 reorder them, or omit required fields.
 
+**CRITICAL**: You must produce ALL 7 sections below, fully filled in. Do NOT produce
+a summary or abbreviated version. Every section must be present.
+
 ---
 
 <!-- TEMPLATE START — planner: fill in all {placeholders}, remove HTML comments -->
@@ -62,8 +65,8 @@ reorder them, or omit required fields.
 
 ## 4. Update Commands
 
-<!-- Exact bash commands the executor must run, in order -->
-<!-- Include comments explaining each step -->
+<!-- Exact bash commands the executor must run via Bash tool, in order -->
+<!-- The executor MUST run these commands — it must NOT manually edit files -->
 
 ```bash
 # Step 1: {description}
@@ -78,8 +81,32 @@ reorder them, or omit required fields.
 
 **Command notes:**
 - {Any important notes about command order, dependencies, or platform quirks}
+- The executor MUST run these commands via the Bash tool. Do NOT manually edit manifest or lock files.
 
-## 5. Verification Checklist
+## 5. Commit and Push Instructions
+
+<!-- The executor uses these instructions to commit and push changes -->
+
+**Branch name:** `fix/security-alerts-{YYYYMMDD-HHMMSS}`
+
+**Steps:**
+1. After running update commands, stage all modified files: `git add -A`
+2. Commit with the message below: `git commit -m "<message>"`
+3. Push the branch to origin: `git push -u origin fix/security-alerts-{YYYYMMDD-HHMMSS}`
+
+**Commit message template:**
+```
+chore(deps): fix security vulnerabilities
+
+Updates:
+- {package}: {old_version} -> {new_version} ({CVE-list})
+
+[MAJOR VERSION UPDATE] {package} - review for breaking changes
+
+Resolves: {GHSA-list}
+```
+
+## 6. Verification Checklist
 
 <!-- The verifier agent uses this checklist after execution -->
 
@@ -88,8 +115,9 @@ reorder them, or omit required fields.
 - [ ] No unintended dependency changes introduced
 - [ ] Build/compilation succeeds (`{build_command}`)
 - [ ] All CVEs resolved: {CVE-1} (fixed in >= {version}), {CVE-2} (fixed in >= {version})
+- [ ] Branch pushed to origin successfully
 
-## 6. Summary
+## 7. Summary
 
 | Package | Current | Recommended | Major? | Severity | CVE Count |
 |---------|---------|-------------|--------|----------|-----------|

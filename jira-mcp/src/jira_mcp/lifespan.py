@@ -41,6 +41,7 @@ async def lifespan(server) -> AsyncIterator[None]:  # noqa: ARG001
         email=_settings.email,
         api_token=_settings.api_token,
         timeout=_settings.timeout,
+        ssl_verify=_settings.ssl_verify,
     )
 
     try:

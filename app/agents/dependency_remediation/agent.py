@@ -116,16 +116,19 @@ async def run_dependency_remediation_agent(
     2. EXECUTION PHASE (executor-agent):
        - Call the executor-agent to perform the updates
        - The executor reads `remediation-plan.md` as its first step (this is automatic)
-       - It uses Section 3 (Files to Checkout) and Section 4 (Update Commands) from the plan
+       - It uses Section 3 (Files to Checkout), Section 4 (Update Commands), and
+         Section 5 (Commit and Push Instructions) from the plan
+       - The executor MUST run update commands via Bash — it must NOT manually edit files
+       - The executor commits and pushes with `git commit` + `git push`
        - Monitor for any errors during execution
        - Note the branch name and commit hash
 
     3. VERIFICATION PHASE (verifier-agent):
        - Call the verifier-agent to validate the updates
-       - The verifier can reference Section 5 (Verification Checklist) from the plan
+       - The verifier can reference Section 6 (Verification Checklist) from the plan
        - Ensure all packages are at expected versions
        - Verify major version updates are properly documented
-       - Confirm the branch is ready for PR creation
+       - Confirm the branch is pushed and ready for PR creation
 
     IMPORTANT RULES:
     - vulnerability-object.json is in your current working directory
@@ -134,6 +137,9 @@ async def run_dependency_remediation_agent(
     - DO NOT create pull requests - that's handled separately
     - If any phase fails, report the failure and stop
     - The planner's output is saved to remediation-plan.md automatically
+    - The planner MUST produce the complete 7-section plan (not a summary)
+    - The executor MUST run update commands via Bash, NEVER manually edit files
+    - The executor pushes with git push after committing
 
     OUTPUT:
     After all phases complete, summarize:

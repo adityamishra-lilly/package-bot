@@ -28,13 +28,21 @@ _ERROR_MAP: dict[int, type[JiraAPIError]] = {
 class JiraClient:
     """Async wrapper around Jira REST API v3."""
 
-    def __init__(self, base_url: str, email: str, api_token: str, timeout: int = 30):
+    def __init__(
+        self,
+        base_url: str,
+        email: str,
+        api_token: str,
+        timeout: int = 30,
+        ssl_verify: bool | str = True,
+    ):
         self._base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(
             base_url=f"{self._base_url}/rest/api/3",
             auth=(email, api_token),
             headers={"Accept": "application/json", "Content-Type": "application/json"},
             timeout=timeout,
+            verify=ssl_verify,
         )
 
     async def close(self) -> None:
