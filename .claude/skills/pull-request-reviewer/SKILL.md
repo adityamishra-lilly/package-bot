@@ -1,159 +1,106 @@
 ---
 name: pull-request-reviewer
-description: Reviews pull requests for security updates. Use when you need to validate PR quality, check CVE references, and verify proper documentation.
+description: Evaluates PR fields and updates them directly via mcp__github__update_pull_request. Use when you need to validate and fix PR title, body, CVE references, and formatting in place.
 allowed-tools: Read, Bash, Grep, Glob, WebFetch, TodoWrite
 ---
 
 # Pull Request Reviewer
 
+## Purpose
+
+This skill evaluates the existing fields (title and body) of a pull request and
+updates them directly via `mcp__github__update_pull_request` if they are incorrect
+or incomplete. It does NOT leave comments, reviews, summaries, or recommendations.
+
 ## Core Workflow
 
-Every PR review follows this pattern:
-
-1. **Fetch**: Get PR details via github-mcp
-2. **Check**: Validate against quality checklist
-3. **Verify**: Ensure security requirements met
-4. **Report**: Provide approval status
-
-```bash
-# Step 1: Get PR details
-mcp__github__get_pull_request owner repo pr_number
-
-# Step 2: Check PR diff
-mcp__github__get_pull_request_diff owner repo pr_number
-
-# Step 3: Review against checklist
-# ... (automated checks)
-
-# Step 4: Generate report
+```
+1. FETCH   → mcp__github__get_pull_request owner repo pr_number
+2. DIFF    → mcp__github__get_pull_request_diff owner repo pr_number
+3. EVALUATE → Check title and body against criteria
+4. UPDATE  → mcp__github__update_pull_request owner repo pr_number (if needed)
 ```
 
-## Review Checklist
+## Evaluation Criteria
 
-### Title and Description
-- [ ] Title clearly indicates security update
-- [ ] Description includes vulnerability table
-- [ ] CVE/GHSA identifiers listed
-- [ ] Severity levels documented
-- [ ] Files modified listed
+### Title
 
-### Major Version Updates
-- [ ] Major updates flagged with ⚠️
-- [ ] Breaking change warnings included
-- [ ] Changelog links provided (if available)
+The PR title must:
+- Clearly indicate a security update
+- Be descriptive and specific
 
-### Code Changes
-- [ ] Only lock files modified
-- [ ] No application code changes
-- [ ] No sensitive files (*.env, credentials, etc.)
-- [ ] No unrelated changes
+**Correct:**
+- `Security: Update vulnerable dependencies`
+- `fix(deps): resolve CVE-2025-12345 in lodash`
 
-### Formatting
-- [ ] Markdown renders correctly
-- [ ] Tables display properly
-- [ ] Links are valid
-- [ ] Co-Authored-By format correct
+**Incorrect (fix these):**
+- `Update stuff`
+- `fixes`
+- `WIP`
 
-## Automated Checks
+### Body - Required Sections
 
-### Check 1: Title Format
-```bash
-# Good titles
-"Security: Update vulnerable dependencies"
-"fix(deps): resolve CVE-2025-12345"
+The PR body must contain ALL of the following. If any are missing or malformed,
+rebuild the body and update it.
 
-# Bad titles
-"Update stuff"
-"fixes"
+#### 1. Vulnerability Table
+
+```markdown
+| Package | From | To | CVE | Severity |
+|---------|------|-----|-----|----------|
+| lodash | 4.17.0 | 4.17.21 | CVE-2025-12345 | high |
 ```
 
-### Check 2: CVE References
-```bash
-# Must contain CVE or GHSA references
-grep -E "(CVE-[0-9]{4}-[0-9]+|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})" pr_body
-```
+- All packages from the diff must be listed
+- CVE/GHSA identifiers must be present for each
+- Severity must be included (critical/high/medium/low)
 
-### Check 3: Lock Files Only
-```bash
-# Check diff only contains lock files
-git diff --name-only | grep -vE "\.(lock|json)$"
-# Should return empty
-```
+#### 2. CVE/GHSA References
 
-### Check 4: No Sensitive Files
-```bash
-# Ensure no sensitive files in diff
-git diff --name-only | grep -E "\.(env|secret|key|pem)$"
-# Should return empty
-```
+- Every advisory must be referenced: `CVE-YYYY-NNNNN` or `GHSA-xxxx-xxxx-xxxx`
+- Cross-check against the actual diff to ensure none are missing
+
+#### 3. Major Version Warnings (if applicable)
+
+- Major version bumps (e.g. 1.x -> 2.x) must be flagged
+- Include breaking change warnings
+
+#### 4. Files Modified
+
+- List all files changed in the PR
+- Lock files are expected; source files are unexpected
+
+#### 5. Formatting
+
+- Tables must render correctly in markdown
+- Links must be valid
+- Co-Authored-By line must be present
+
+## Update Rules
+
+- Make at most ONE call to `mcp__github__update_pull_request` with all fixes combined
+- If updating the body, include the ENTIRE corrected body (not a partial patch)
+- If only the title needs fixing, update only the title
+- If only the body needs fixing, update only the body
+- If both need fixing, update both in one call
+- If everything is correct, make NO update call
+
+## What This Skill Does NOT Do
+
+- Does NOT leave PR comments
+- Does NOT submit PR reviews (approve/request changes)
+- Does NOT output review reports or recommendations
+- Does NOT modify code or files in the repository
 
 ## Ready-to-Use Scripts
 
 | Script | Description |
 |--------|-------------|
-| [scripts/review-pr.sh](scripts/review-pr.sh) | Automated PR review |
+| [scripts/review-pr.sh](scripts/review-pr.sh) | Check PR fields |
 | [scripts/check-diff.sh](scripts/check-diff.sh) | Validate PR diff |
-
-## Output Report Format
-
-```markdown
-## PR Review Report
-
-### PR: #123 - Security: Update vulnerable dependencies
-
-### Status: ✓ APPROVED | ⚠️ CHANGES_REQUESTED | ⏳ PENDING
-
-### Checklist Results
-
-| Category | Item | Status |
-|----------|------|--------|
-| Title | Clear security title | ✓ |
-| Description | CVE references | ✓ |
-| Description | Severity levels | ✓ |
-| Description | Major version warnings | ✓ |
-| Changes | Lock files only | ✓ |
-| Changes | No sensitive files | ✓ |
-| Format | Proper markdown | ✓ |
-
-### Issues Found
-
-- None
-
-### Recommendation
-
-**APPROVE**: This PR meets all security update standards and is ready to merge.
-
-### Merge Notes
-
-- Review major version updates if flagged
-- Run CI/CD pipeline before merge
-- Consider squash merge for clean history
-```
-
-## Review Outcomes
-
-### APPROVED
-PR meets all requirements:
-- Clear title and description
-- All CVEs documented
-- Only expected files changed
-- Proper formatting
-
-### CHANGES_REQUESTED
-Issues found that must be fixed:
-- Missing CVE references
-- Major version not documented
-- Unexpected file changes
-- Formatting issues
-
-### PENDING
-Cannot complete review:
-- PR not accessible
-- Missing information
-- Requires manual verification
 
 ## References
 
 | Reference | When to Use |
 |-----------|-------------|
-| [references/review-criteria.md](references/review-criteria.md) | Review standards |
+| [references/review-criteria.md](references/review-criteria.md) | Field evaluation standards |

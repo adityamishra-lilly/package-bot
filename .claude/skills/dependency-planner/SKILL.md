@@ -120,14 +120,20 @@ go mod tidy
 
 **You MUST follow the template exactly:** [templates/remediation-plan-template.md](templates/remediation-plan-template.md)
 
+**CRITICAL**: You MUST produce the COMPLETE plan with ALL 7 sections fully filled in.
+Do NOT produce a summary or abbreviated version. Every section (1-7) must be present
+and contain all required fields. Read the template file FIRST, then output your plan
+matching its structure exactly.
+
 The plan is saved to `remediation-plan.md` in the workspace directory. The executor agent
 reads this file as its primary input, so the structure must be consistent and complete.
 
 Key sections the executor parses:
-1. **Section 3 (Files to Checkout)** -- exact file paths for sparse checkout
-2. **Section 4 (Update Commands)** -- exact bash commands to run, in order
-3. **Section 2 (Package Updates)** -- version info for commit message and major version flags
-4. **Section 6 (Summary)** -- quick reference table
+1. **Section 2 (Package Updates)** -- version info for commit message and major version flags
+2. **Section 3 (Files to Checkout)** -- exact file paths for sparse checkout
+3. **Section 4 (Update Commands)** -- exact bash commands to run via Bash, in order (NOT manual file edits)
+4. **Section 5 (Commit and Push Instructions)** -- branch name, commit message, git push command
+5. **Section 7 (Summary)** -- quick reference table
 
 ## Deep-Dive Documentation
 
@@ -150,7 +156,24 @@ Key sections the executor parses:
 | [scripts/detect-ecosystem.sh](scripts/detect-ecosystem.sh) | Identify package manager from files |
 | [scripts/compare-versions.sh](scripts/compare-versions.sh) | Compare semver versions |
 
+## Plan Sections (all 7 required)
+
+1. **Repository Analysis** — metadata table (org, repo, ecosystems, files)
+2. **Package Updates** — one subsection per package with version table + notes
+3. **Files to Checkout** — exact file paths in a code block
+4. **Update Commands** — exact bash commands in a code block
+5. **Commit and Push Instructions** — branch name, commit message, git push command
+6. **Verification Checklist** — items the verifier checks after execution
+7. **Summary** — table + key decisions
+
 ## Anti-Patterns
+
+:x: **WRONG - Producing a summary instead of the full plan:**
+```
+The plan is to update containerd to v1.7.29 and crypto to v0.45.0...
+```
+
+:white_check_mark: **RIGHT - Producing the complete 7-section plan following the template exactly**
 
 ❌ **WRONG - Reading local files:**
 ```bash

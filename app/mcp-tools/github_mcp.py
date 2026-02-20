@@ -50,6 +50,9 @@ def get_github_mcp_tools() -> list[str]:
     # - push_files
     # - create_issue
     # - create_pull_request
+    # - update_pull_request
+    # - get_pull_request
+    # - get_pull_request_diff
     # - fork_repository
     # - create_branch
     # - search_code
@@ -62,7 +65,9 @@ def get_github_mcp_tools() -> list[str]:
             "mcp__github__create_or_update_file",
             "mcp__github__push_files",
             "mcp__github__create_pull_request",
-            "mcp__github__get_file_contents",
+            "mcp__github__update_pull_request",
+            "mcp__github__get_pull_request",
+            "mcp__github__get_pull_request_diff",
             "mcp__github__get_file_contents",
             "mcp__github__search_code",
             "mcp__github__search_repositories",

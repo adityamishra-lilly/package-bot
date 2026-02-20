@@ -93,19 +93,26 @@ planner_agent = AgentDefinition(
     You MUST follow the template in `.claude/skills/dependency-planner/templates/remediation-plan-template.md`.
     Read that template file FIRST before producing your plan.
 
-    The plan has 6 numbered sections that the executor parses:
+    You MUST output the COMPLETE plan following the template EXACTLY. Do NOT produce a
+    summary or abbreviated version. Every section (1-7) must be present and fully filled in.
+    The executor agent reads this file directly — if any section is missing or incomplete,
+    execution will fail.
 
-    ## 1. Repository Analysis   — metadata table (org, repo, ecosystems, files)
-    ## 2. Package Updates        — one subsection per package with version table + notes
-    ## 3. Files to Checkout      — exact file paths in a code block (executor uses for sparse checkout)
-    ## 4. Update Commands        — exact bash commands in a code block (executor runs these verbatim)
-    ## 5. Verification Checklist — items the verifier checks after execution
-    ## 6. Summary                — table + key decisions
+    The plan has 7 numbered sections:
+
+    ## 1. Repository Analysis        — metadata table (org, repo, ecosystems, files)
+    ## 2. Package Updates             — one subsection per package with version table + notes
+    ## 3. Files to Checkout           — exact file paths in a code block (executor uses for sparse checkout)
+    ## 4. Update Commands             — exact bash commands in a code block (executor runs these verbatim via Bash)
+    ## 5. Commit and Push Instructions — branch name, commit message, git push command
+    ## 6. Verification Checklist      — items the verifier checks after execution
+    ## 7. Summary                     — table + key decisions
 
     The executor relies on:
-    - Section 3 for the sparse checkout file list
-    - Section 4 for the exact commands to run (in order)
     - Section 2 for version info, MAJOR_VERSION_UPDATE flags, and commit message content
+    - Section 3 for the sparse checkout file list
+    - Section 4 for the exact commands to run via Bash (in order)
+    - Section 5 for the branch name, commit message, and push command
 
     IMPORTANT:
     - NEVER access local filesystem for target repository files
@@ -113,6 +120,8 @@ planner_agent = AgentDefinition(
     - The vulnerability-object.json is the ONLY local file you should read (besides the template)
     - Always check for major version updates and flag them prominently
     - Read the template file before writing your plan
+    - Produce the FULL 7-section plan, not a summary
+    - Section 4 commands are run via Bash — the executor must NOT manually edit files
     """,
     tools=PLANNER_APPROVED_TOOLS,
     model="opus"

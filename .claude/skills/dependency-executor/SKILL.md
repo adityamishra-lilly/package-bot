@@ -1,6 +1,6 @@
 ---
 name: dependency-executor
-description: Executes sparse checkout and dependency updates for security remediation. Use when you need to clone minimal files, run ecosystem-specific update commands, and commit changes.
+description: Executes sparse checkout and dependency updates for security remediation. Use when you need to clone minimal files, run ecosystem-specific update commands, and commit/push changes.
 allowed-tools: Read, Bash, Write, MultiEdit, Glob, Grep, TodoWrite
 ---
 
@@ -20,21 +20,23 @@ Extract these sections:
 
 | Plan Section | What You Need |
 |-------------|---------------|
+| **Section 1: Repository Analysis** | Org, repo name, and repository URL |
+| **Section 2: Package Updates** | Version info + MAJOR_VERSION_UPDATE flags for commit message |
 | **Section 3: Files to Checkout** | Exact file paths for sparse checkout |
 | **Section 4: Update Commands** | Exact bash commands to run, in order |
-| **Section 2: Package Updates** | Version info + MAJOR_VERSION_UPDATE flags for commit message |
-| **Section 1: Repository Analysis** | Org, repo name, and repository URL |
+| **Section 5: Commit and Push Instructions** | Branch name, commit message, push command |
 
 ## Core Workflow
 
 After reading the plan, follow this execution pattern:
 
-1. **Read Plan**: Parse `remediation-plan.md` (Section 3 for files, Section 4 for commands)
+1. **Read Plan**: Parse `remediation-plan.md` (all sections)
 2. **Setup**: Create workspace subdirectory
 3. **Clone**: Sparse checkout only files listed in Section 3
-4. **Branch**: Create fix branch for changes
-5. **Update**: Run exact commands from Section 4 in order
-6. **Commit**: Commit changes with version info from Section 2
+4. **Branch**: Create fix branch
+5. **Update**: Run exact commands from Section 4 via Bash
+6. **Commit**: Stage and commit changes
+7. **Push**: Push branch to origin
 
 ```bash
 # Step 1: Read the plan
@@ -44,17 +46,24 @@ Read remediation-plan.md
 mkdir -p clone && cd clone
 
 # Step 3: Sparse checkout (files from Section 3)
-./scripts/sparse-checkout.sh https://github.com/org/repo pyproject.toml uv.lock
+git clone --no-checkout --filter=blob:none https://github.com/org/repo repo
+cd repo
 
-# Step 4: Create branch
+# Step 4: Create fix branch
 git checkout -b fix/security-alerts-$(date +%Y%m%d-%H%M%S)
 
-# Step 5: Run update commands (from Section 4)
-./scripts/update-pip.sh virtualenv 20.28.1
+# Step 5: Configure sparse checkout
+git sparse-checkout init --no-cone
+git sparse-checkout set pyproject.toml uv.lock
+git checkout
 
-# Step 6: Commit (version info from Section 2)
-git add pyproject.toml uv.lock
+# Step 6: Run update commands (from Section 4) — MUST use Bash, NOT manual edits
+uv lock --upgrade-package virtualenv==20.28.1
+
+# Step 7: Commit and push (from Section 5)
+git add -A
 git commit -m "chore(deps): fix security vulnerabilities"
+git push -u origin fix/security-alerts-YYYYMMDD-HHMMSS
 ```
 
 ## Sparse Checkout (Critical)
@@ -78,6 +87,10 @@ git checkout
 ```
 
 ## Ecosystem-Specific Update Commands
+
+**CRITICAL: You MUST run these commands via the Bash tool. Do NOT manually edit
+manifest files (go.mod, pyproject.toml, package.json, etc.) or lock files
+(go.sum, uv.lock, package-lock.json, etc.). The commands handle all file changes.**
 
 ### Python (uv)
 ```bash
@@ -115,7 +128,29 @@ go get <package>@v<version>
 go mod tidy
 ```
 
-## Commit Message Format
+## Commit and Push
+
+After running update commands, commit and push the changes:
+
+```bash
+# Stage all changes
+git add -A
+
+# Commit with structured message
+git commit -m "chore(deps): fix security vulnerabilities
+
+Updates:
+- virtualenv: 20.0.0 -> 20.28.1 (CVE-2025-68146)
+
+Resolves: GHSA-xxxx-yyyy"
+
+# Push to origin
+git push -u origin fix/security-alerts-YYYYMMDD-HHMMSS
+```
+
+### Commit Message Format
+
+Build the commit message from Section 2 (Package Updates):
 
 ```
 chore(deps): fix security vulnerabilities
@@ -144,24 +179,35 @@ Resolves: GHSA-xxxx-yyyy, GHSA-aaaa-bbbb
 
 ### Update Python Package (uv)
 ```bash
-./scripts/sparse-checkout.sh https://github.com/org/repo pyproject.toml uv.lock
-cd repo
-./scripts/update-pip.sh virtualenv 20.28.1 uv
-./scripts/commit-changes.sh "virtualenv:20.0.0:20.28.1:CVE-2025-68146"
+# Sparse checkout
+git clone --no-checkout --filter=blob:none https://github.com/org/repo repo
+cd repo && git checkout -b fix/security-alerts-$(date +%Y%m%d-%H%M%S)
+git sparse-checkout init --no-cone
+git sparse-checkout set pyproject.toml uv.lock && git checkout
+
+# Run update command — NOT manual file edits
+uv lock --upgrade-package virtualenv==20.28.1
+
+# Commit and push
+git add -A && git commit -m "chore(deps): fix security vulnerabilities"
+git push -u origin fix/security-alerts-YYYYMMDD-HHMMSS
 ```
 
 ### Update Go Module
 ```bash
-./scripts/sparse-checkout.sh https://github.com/org/repo go.mod go.sum
-cd repo
-./scripts/update-go.sh golang.org/x/crypto 0.45.0
-./scripts/commit-changes.sh "golang.org/x/crypto:0.44.0:0.45.0:CVE-2025-47914"
-```
+# Sparse checkout
+git clone --no-checkout --filter=blob:none https://github.com/org/repo repo
+cd repo && git checkout -b fix/security-alerts-$(date +%Y%m%d-%H%M%S)
+git sparse-checkout init --no-cone
+git sparse-checkout set go.mod go.sum && git checkout
 
-### Update with Major Version Warning
-```bash
-./scripts/update-go.sh github.com/containerd/containerd 2.2.0
-./scripts/commit-changes.sh "containerd:1.6.0:2.2.0:CVE-2024-25621:MAJOR"
+# Run update commands — NOT manual file edits
+go get golang.org/x/crypto@v0.45.0
+go mod tidy
+
+# Commit and push
+git add -A && git commit -m "chore(deps): fix security vulnerabilities"
+git push -u origin fix/security-alerts-YYYYMMDD-HHMMSS
 ```
 
 ## Important Rules
@@ -169,8 +215,26 @@ cd repo
 1. **Workspace Isolation**: Create clone in subdirectory, not current directory
 2. **Minimal Files**: Only checkout files needed for update
 3. **No Full Install**: Use lock-only commands to avoid downloading packages
-4. **No PR Creation**: Commit only - PR handled by separate agent
-5. **Major Version Flag**: Include [MAJOR VERSION UPDATE] in commit if applicable
+4. **Run Commands via Bash**: ALWAYS run update commands via Bash tool. NEVER manually edit manifest or lock files
+5. **Git Push**: Use `git push -u origin <branch>` to push changes after committing
+6. **No PR Creation**: PR creation is handled by a separate agent
+7. **Major Version Flag**: Include [MAJOR VERSION UPDATE] in commit message if applicable
+
+## Anti-Patterns
+
+**NEVER manually edit dependency files:**
+```
+# WRONG — do not use Write/Edit to modify go.mod, go.sum, pyproject.toml, uv.lock, etc.
+Write go.mod with modified content
+Edit go.mod replacing version string
+```
+
+**ALWAYS run the ecosystem update command:**
+```bash
+# RIGHT — run the actual command that updates the files correctly
+go get github.com/containerd/containerd@v1.7.29
+go mod tidy
+```
 
 ## Output Format
 
@@ -195,9 +259,10 @@ Report results after execution:
 ### Files Modified
 - uv.lock (12 lines changed)
 
-### Commit
-- Hash: abc1234
-- Message: chore(deps): fix security vulnerabilities
+### Commit and Push
+- Commit: abc1234
+- Branch: fix/security-alerts-20260215-143022
+- Push: SUCCESS
 
 ### Major Version Updates
 - containerd: 1.6.0 -> 2.2.0 [FLAGGED]

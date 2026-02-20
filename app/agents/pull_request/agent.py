@@ -111,11 +111,11 @@ async def run_pull_request_agent(
        - Ensure proper formatting with actual newlines
        - Get the PR URL and number
 
-    2. PR REVIEW (reviewer-agent) - if auto_review enabled:
-       - Call the reviewer-agent to validate the PR
-       - Check description completeness
-       - Verify major version warnings
-       - Provide approval status
+    2. PR FIELD VALIDATION (reviewer-agent) - if auto_review enabled:
+       - Call the reviewer-agent to evaluate the PR title and body
+       - The reviewer will check completeness and correctness
+       - If any fields are wrong it will update them directly via mcp__github__update_pull_request
+       - The reviewer does NOT leave comments or reviews, it only updates PR fields
 
     IMPORTANT:
     - The fix branch ({branch_name}) already exists with committed changes
@@ -143,7 +143,7 @@ Branch: {branch_name}
 Target: main
 
 Use the vulnerability data to create a comprehensive PR description.
-{"After creation, have the reviewer-agent verify the PR quality." if auto_review else ""}
+{"After creation, have the reviewer-agent evaluate the PR fields and update them directly if anything is wrong." if auto_review else ""}
 """
             }
         }

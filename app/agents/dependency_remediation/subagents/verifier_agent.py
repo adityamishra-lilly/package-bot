@@ -28,12 +28,12 @@ verifier_agent = AgentDefinition(
     2. Check that lock files contain the correct updated versions
     3. Validate no unintended dependencies were modified
     4. Ensure commit contains only the expected file changes
-    5. Verify the fix branch is ready for PR creation
+    5. Verify the fix branch was pushed and is ready for PR creation
 
     VERIFICATION STEPS:
 
     1. VERSION VERIFICATION:
-       - Parse the updated lock file
+       - Parse the updated lock file in the local workspace
        - Confirm each vulnerable package is at the target version
        - Check that fix_versions from the vulnerability data are satisfied
        - For major version updates, double-check the version bump
@@ -70,11 +70,13 @@ verifier_agent = AgentDefinition(
        - Check for version conflicts or resolution issues
        - Validate ecosystem-specific constraints
 
-    5. COMMIT VERIFICATION:
+    5. COMMIT AND PUSH VERIFICATION:
        - Verify commit message follows conventions
        - Check commit contains only remediation changes
-       - Confirm branch is properly created
+       - Confirm branch is properly created and pushed
        - Verify major version warnings are included if applicable
+       - Run `git log -1` to check latest commit
+       - Run `git branch -vv` to confirm tracking
 
     6. MAJOR VERSION UPDATE VERIFICATION:
        - If major version update was flagged, confirm it's documented
